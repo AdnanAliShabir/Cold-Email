@@ -230,6 +230,18 @@ function Outreach({ lead, onUpdate }) {
       .replace(/\{\{\s*your_company\s*\}\}/gi, agency)
   }
 
+  /** Greeting = lead contact (receiver), never Settings sender name */
+  const forceReceiverGreeting = (text) => {
+    if (!text) return text
+    let receiver = (lead.contact?.name || '').trim()
+    const sender = (settings.sender_name || '').trim()
+    if (!receiver || (sender && receiver.toLowerCase() === sender.toLowerCase())) {
+      receiver = (lead.company?.name || '').trim() || 'there'
+    }
+    return String(text).replace(/^(Hi|Hello|Hey|Dear)\s+[^,\n]+(,)?/i, `Hi ${receiver}$2`)
+      .replace(/^(Hi\s+[^\n,]+)$/im, (_, g) => (g.endsWith(',') ? g : `${g},`))
+  }
+
   useEffect(() => {
     api.get('/settings').then((res) => {
       setSettings({
@@ -254,15 +266,11 @@ function Outreach({ lead, onUpdate }) {
     }
     setSending(true)
     try {
-      const res = await api.post('/emails', { lead_id: lead.id, subject, body, send: true })
+      await api.post('/emails', { lead_id: lead.id, subject, body, send: true })
       setBody('')
       setSubject('')
       setAiDraft(null)
-      // Prefer server email list refresh; fall back to optimistic insert
-      const updated = await onUpdate?.()
-      if (!updated && res.data?.email) {
-        // parent fetch may not return; parent still updates state via setLead
-      }
+      await onUpdate?.()
     } catch (err) {
       alert(err?.response?.data?.message || 'Failed to send email')
     } finally {
@@ -276,7 +284,7 @@ function Outreach({ lead, onUpdate }) {
       const res = await api.post('/ai/outreach', { lead_id: lead.id, type })
       const draft = res.data.draft || {}
       const nextSubject = applySender(draft.subject || '')
-      const nextBody = applySender(draft.body || '')
+      const nextBody = forceReceiverGreeting(applySender(draft.body || ''))
       setAiDraft({ ...draft, subject: nextSubject, body: nextBody })
       setSubject(nextSubject)
       setBody(nextBody)
