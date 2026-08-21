@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Email;
 use App\Models\Lead;
+use App\Services\ResendMailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class EmailController extends Controller
 {
+    public function __construct(private ResendMailService $resend) {}
+
     public function index(Request $request): JsonResponse
     {
         $emails = Email::with('lead.company', 'template')
@@ -30,12 +34,19 @@ class EmailController extends Controller
             'template_id' => ['nullable', 'exists:email_templates,id'],
             'subject' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string'],
-            'status' => ['sometimes', 'in:' . implode(',', Email::STATUSES)],
+            'status' => ['sometimes', 'in:'.implode(',', Email::STATUSES)],
             'send' => ['sometimes', 'boolean'],
         ]);
 
-        $lead = Lead::findOrFail($data['lead_id']);
+        $lead = Lead::with('contact')->findOrFail($data['lead_id']);
         abort_unless($lead->user_id === $request->user()->id, 403, 'Not authorized');
+
+        $shouldSend = (bool) ($data['send'] ?? false);
+        $toEmail = $lead->contact?->email;
+
+        if ($shouldSend && ! $toEmail) {
+            return response()->json(['message' => 'Lead has no contact email'], 422);
+        }
 
         $email = Email::create([
             'user_id' => $request->user()->id,
@@ -44,14 +55,32 @@ class EmailController extends Controller
             'direction' => 'outbound',
             'subject' => $data['subject'],
             'body' => $data['body'],
-            'to_email' => $lead->contact?->email,
-            'status' => ($data['send'] ?? false) ? 'sent' : ($data['status'] ?? 'draft'),
-            'sent_at' => ($data['send'] ?? false) ? now() : null,
+            'from_email' => config('mail.from.address'),
+            'to_email' => $toEmail,
+            'status' => $shouldSend ? 'sent' : ($data['status'] ?? 'draft'),
+            'sent_at' => $shouldSend ? now() : null,
+            'provider' => $shouldSend ? 'resend' : null,
         ]);
 
-        if ($data['send'] ?? false) {
-            $this->sendEmail($email);
-            $email->update(['status' => 'sent', 'sent_at' => now()]);
+        if ($shouldSend) {
+            try {
+                $messageId = $this->deliver($email);
+                $email->update([
+                    'status' => 'sent',
+                    'sent_at' => now(),
+                    'provider' => config('services.resend.key') ? 'resend' : config('mail.default'),
+                    'provider_message_id' => $messageId,
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('Email send failed', ['email_id' => $email->id, 'error' => $e->getMessage()]);
+                $email->update(['status' => 'draft', 'sent_at' => null, 'provider' => null]);
+
+                return response()->json([
+                    'message' => 'Failed to send email: '.$e->getMessage(),
+                    'email' => $email->fresh()->load('lead.company', 'template'),
+                ], 502);
+            }
+
             $lead->update(['last_contacted_at' => now(), 'status' => 'active']);
             $lead->activities()->create([
                 'user_id' => $lead->user_id,
@@ -60,14 +89,14 @@ class EmailController extends Controller
             ]);
         }
 
-        return response()->json(['email' => $email->load('lead.company', 'template')], 201);
+        return response()->json(['email' => $email->fresh()->load('lead.company', 'template')], 201);
     }
 
     public function updateStatus(Request $request, Email $email): JsonResponse
     {
         abort_unless($email->user_id === $request->user()->id, 403, 'Not authorized');
 
-        $status = $request->validate(['status' => ['required', 'in:' . implode(',', Email::STATUSES)]])['status'];
+        $status = $request->validate(['status' => ['required', 'in:'.implode(',', Email::STATUSES)]])['status'];
 
         $timestamps = [
             'sent' => 'sent_at',
@@ -84,16 +113,17 @@ class EmailController extends Controller
         return response()->json(['email' => $email->fresh()]);
     }
 
-    private function sendEmail(Email $email): void
+    private function deliver(Email $email): ?string
     {
-        try {
-            Mail::raw($email->body, function ($message) use ($email) {
-                $message->to($email->to_email)
-                    ->subject($email->subject);
-            });
-        } catch (\Throwable $e) {
-            // Mail delivery is best-effort in dev (log driver)
-            logger()->warning("Email delivery failed: {$e->getMessage()}");
+        if (config('services.resend.key')) {
+            return $this->resend->send($email);
         }
+
+        // Local/dev fallback: log driver (no real delivery, no provider id)
+        Mail::raw($email->body, function ($message) use ($email) {
+            $message->to($email->to_email)->subject($email->subject);
+        });
+
+        return null;
     }
 }

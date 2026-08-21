@@ -14,7 +14,8 @@ class Email extends Model
 
     protected $fillable = [
         'user_id', 'lead_id', 'template_id', 'direction', 'subject', 'body',
-        'from_email', 'to_email', 'status', 'sent_at', 'opened_at', 'clicked_at', 'replied_at',
+        'from_email', 'to_email', 'provider_message_id', 'provider',
+        'status', 'sent_at', 'opened_at', 'clicked_at', 'replied_at',
     ];
 
     protected $casts = [

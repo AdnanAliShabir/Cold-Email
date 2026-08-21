@@ -198,17 +198,22 @@ function Overview({ lead }) {
   )
 }
 
-function Outreach({ lead }) {
+function Outreach({ lead, onUpdate }) {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [aiDraft, setAiDraft] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
 
   const send = async () => {
-    await api.post('/emails', { lead_id: lead.id, subject, body, send: true })
-    alert('Email sent')
-    setBody('')
-    setSubject('')
+    try {
+      await api.post('/emails', { lead_id: lead.id, subject, body, send: true })
+      alert('Email sent via Resend')
+      setBody('')
+      setSubject('')
+      onUpdate?.()
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to send email')
+    }
   }
 
   const generateAI = async (type) => {
@@ -232,7 +237,12 @@ function Outreach({ lead }) {
             <div key={email.id} className="border rounded-lg p-3">
               <div className="flex justify-between">
                 <p className="font-medium text-sm">{email.subject}</p>
-                <Badge color={email.status === 'replied' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-700'}>{email.status}</Badge>
+                <Badge color={
+                  email.status === 'replied' ? 'bg-emerald-100 text-emerald-700'
+                    : email.status === 'clicked' ? 'bg-blue-100 text-blue-700'
+                      : email.status === 'opened' ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-gray-100 text-gray-700'
+                }>{email.status}</Badge>
               </div>
               <p className="text-xs text-gray-500 mt-2 whitespace-pre-line">{email.body}</p>
               <p className="text-xs text-gray-400 mt-1">{new Date(email.created_at).toLocaleString()}</p>

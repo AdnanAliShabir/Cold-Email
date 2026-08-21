@@ -1,80 +1,139 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <title>LeadCRM Store Extractor</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>LeadCRM Extractor</h1>
-      <span id="platformBadge" class="badge hidden"></span>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <h1>LeadCRM</h1>
+        <p class="sub">Store → CRM</p>
+      </div>
+      <div class="top-actions">
+        <span id="platformBadge" class="badge hidden"></span>
+        <button id="themeToggle" type="button" class="theme-btn" title="Toggle light / dark" aria-label="Toggle theme">
+          <span id="themeIcon">☾</span>
+        </button>
+      </div>
     </header>
 
-    <label class="tiny">API base URL
-      <input id="apiBase" type="url" placeholder="https://your-api.onrender.com/api" autocomplete="off" />
-    </label>
-    <div id="settings" class="setting-row">
-      <input id="apiToken" type="password" placeholder="Your LeadCRM API token" autocomplete="off" />
-      <button id="saveToken" class="btn btn-secondary btn-inline">Save</button>
-    </div>
-    <p class="hint" id="status"></p>
+    <details id="apiDetails" class="panel">
+      <summary>API settings</summary>
+      <label class="field">Base URL
+        <input id="apiBase" type="url" placeholder="https://…onrender.com/api" autocomplete="off" />
+      </label>
+    </details>
 
-    <div id="emptyState" class="state hidden">
-      <p>Open a <strong>Google Play</strong> or <strong>App Store</strong> app details page, then click Re-extract.</p>
+    <section id="authLoggedOut" class="panel auth">
+      <div class="grid-2">
+        <label class="field">Email
+          <input id="loginEmail" type="email" placeholder="admin@crm.com" autocomplete="username" />
+        </label>
+        <label class="field">Password
+          <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" />
+        </label>
+      </div>
+      <button id="loginBtn" class="btn btn-primary">Sign in</button>
+    </section>
+
+    <section id="authLoggedIn" class="auth-bar hidden">
+      <span id="authUser" class="auth-user"></span>
+      <button id="logoutBtn" type="button" class="linkish">Sign out</button>
+    </section>
+
+    <p class="status" id="status"></p>
+
+    <div id="emptyState" class="empty hidden">
+      Open a Play / App Store <strong>app details</strong> page, then Re-extract.
     </div>
 
-    <div id="form" class="hidden">
-      <div class="app-summary">
+    <section id="form" class="hidden">
+      <div class="app-card">
         <img id="appIcon" alt="" />
-        <div>
+        <div class="app-card-body">
           <strong id="appName"></strong>
           <span id="appMeta" class="meta"></span>
+          <span id="fSourceHint" class="meta soft"></span>
         </div>
       </div>
 
-      <label>App name
-        <input id="fName" />
-      </label>
-      <label>Company / Developer
-        <input id="fCompany" />
-      </label>
-      <label>Website
+      <div class="stats" id="statsRow">
+        <div class="stat"><em id="statRating">—</em><span>Rating</span></div>
+        <div class="stat"><em id="statReviews">—</em><span>Reviews</span></div>
+        <div class="stat"><em id="statDownloads">—</em><span>Downloads</span></div>
+        <div class="stat"><em id="statVersion">—</em><span>Version</span></div>
+      </div>
+
+      <div class="grid-2">
+        <label class="field">App
+          <input id="fName" />
+        </label>
+        <label class="field">Company
+          <input id="fCompany" />
+        </label>
+      </div>
+      <label class="field">Website
         <input id="fWebsite" placeholder="https://..." />
       </label>
-      <label>Store URL
+      <label class="field">Store URL
         <input id="fUrl" />
       </label>
-      <div class="row">
-        <label>Rating
+
+      <div class="grid-3">
+        <label class="field">Rating
           <input id="fRating" type="number" step="0.1" min="0" max="5" />
         </label>
-        <label>Reviews
+        <label class="field">Reviews
           <input id="fReviews" type="number" />
         </label>
-      </div>
-      <div class="row">
-        <label>Downloads
+        <label class="field">Downloads
           <input id="fDownloads" type="number" />
         </label>
-        <label>Version
+      </div>
+      <div class="grid-3">
+        <label class="field">Version
           <input id="fVersion" />
         </label>
+        <label class="field">Updated
+          <input id="fUpdated" />
+        </label>
+        <label class="field">Released
+          <input id="fReleased" readonly />
+        </label>
       </div>
-      <label>Last updated
-        <input id="fUpdated" />
+      <div class="grid-2">
+        <label class="field">Requires
+          <input id="fRequires" readonly />
+        </label>
+        <label class="field">Size
+          <input id="fSize" readonly />
+        </label>
+      </div>
+
+      <div class="grid-2">
+        <label class="field">Contact
+          <input id="fContact" placeholder="Name" />
+        </label>
+        <label class="field">Email
+          <input id="fEmail" placeholder="email@" />
+        </label>
+      </div>
+      <div class="grid-2">
+        <label class="field">Country
+          <input id="fCountry" />
+        </label>
+        <label class="field">Phone
+          <input id="fPhone" placeholder="(optional)" />
+        </label>
+      </div>
+      <label class="field">Address
+        <input id="fAddress" />
       </label>
-      <div class="row">
-        <label>Contact name
-          <input id="fContact" placeholder="(optional)" />
-        </label>
-        <label>Contact email
-          <input id="fEmail" placeholder="(optional)" />
-        </label>
-      </div>
-      <div class="row">
-        <label>Source
+      <div class="grid-2">
+        <label class="field">Source
           <select id="fSource">
             <option>Play Store Search</option>
             <option>App Store Search</option>
@@ -84,7 +143,7 @@
             <option>Chrome Extension</option>
           </select>
         </label>
-        <label>Priority
+        <label class="field">Priority
           <select id="fPriority">
             <option value="low">Low</option>
             <option value="medium" selected>Medium</option>
@@ -93,14 +152,16 @@
         </label>
       </div>
 
-      <div id="liActions" class="li-actions hidden">
-        <button id="openLiPeople" type="button" class="btn btn-secondary">Find people on LinkedIn</button>
-        <button id="openLiCompany" type="button" class="btn btn-secondary">Find company on LinkedIn</button>
+      <div id="liActions" class="actions-row hidden">
+        <button id="openLiPeople" type="button" class="btn btn-ghost">LinkedIn people</button>
+        <button id="openLiCompany" type="button" class="btn btn-ghost">LinkedIn company</button>
       </div>
 
-      <button id="sendToCrm" class="btn btn-primary">Send to LeadCRM</button>
-      <button id="reextract" class="btn btn-secondary">Re-extract from page</button>
-    </div>
+      <div class="actions-row">
+        <button id="reextract" class="btn btn-ghost">Re-extract</button>
+        <button id="sendToCrm" class="btn btn-primary">Send to CRM</button>
+      </div>
+    </section>
   </div>
 
   <script src="popup.js"></script>

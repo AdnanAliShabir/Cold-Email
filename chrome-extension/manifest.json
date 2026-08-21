@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LeadCRM Store Extractor",
-  "version": "1.1.0",
+  "version": "1.8.4",
   "description": "Extract app metadata from Google Play / App Store, hunt contacts on LinkedIn (search links), and send leads to LeadCRM.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": [
