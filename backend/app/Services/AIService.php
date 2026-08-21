@@ -140,37 +140,86 @@ class AIService
     public function generateOutreach(Lead $lead, string $type = 'cold', array $sender = []): array
     {
         $company = $lead->company?->name ?? 'your company';
-        $contact = $lead->contact?->name ?? 'there';
+        $contact = trim((string) ($lead->contact?->name ?? ''));
         $position = $lead->contact?->position ?? '';
         $appName = $lead->app?->name ?? 'your app';
         $yourName = trim((string) ($sender['from_name'] ?? '')) ?: 'Your Name';
         $yourCompany = trim((string) ($sender['company_name'] ?? ''));
 
-        $context = "Prospect company: {$company}. Contact: {$contact}, {$position}. App: {$appName}. "
-            ."IMPORTANT: Sign the email as \"{$yourName}\"".($yourCompany ? " from \"{$yourCompany}\"" : '')
-            .'. Never use placeholders like [Your Name] or [Your Agency].';
+        // Greeting must be the prospect — never the sender
+        $recipient = $contact !== '' ? $contact : 'there';
+        if ($contact !== '' && strcasecmp($contact, $yourName) === 0) {
+            // Lead contact was wrongly set to sender; prefer company / there for greeting
+            $recipient = trim((string) ($lead->company?->name ?? '')) ?: 'there';
+        }
+
+        $context = "Recipient (use ONLY in greeting Hi/Hello): {$recipient}. "
+            ."Prospect company: {$company}. Contact title: {$position}. App: {$appName}. "
+            ."Sender (use ONLY when introducing yourself and signing): name=\"{$yourName}\""
+            .($yourCompany !== '' ? ", company=\"{$yourCompany}\"" : '')
+            .'. Do not put the sender name after Hi/Hello. Never use [Your Name] or [Your Agency].';
 
         $system = match ($type) {
-            'followup' => 'You are an expert sales email writer. Write a short follow-up email (max 120 words). Always sign with the exact sender name (and company if given). Never use bracket placeholders. Return JSON with keys: subject (string), body (string).',
-            'linkedin' => 'You are an expert sales professional. Write a short LinkedIn connection message (max 80 words). Always sign with the exact sender name (and company if given). Never use bracket placeholders. Return JSON with keys: subject (string), body (string).',
-            'meeting' => 'You are an expert sales email writer. Write a short meeting request email (max 100 words). Always sign with the exact sender name (and company if given). Never use bracket placeholders. Return JSON with keys: subject (string), body (string).',
-            default => 'You are an expert cold email writer for a mobile app development agency. Write a personalized cold email (max 150 words). Introduce yourself with the exact sender name and company provided. Never use placeholders like [Your Name] or [Your Agency]. Return JSON with keys: subject (string), body (string).',
+            'followup' => 'You are an expert sales email writer. Write a short follow-up email (max 120 words). Greeting must address the recipient name provided. Sign with the sender name. Never swap them. Return JSON with keys: subject (string), body (string).',
+            'linkedin' => 'You are an expert sales professional. Write a short LinkedIn connection message (max 80 words). Greeting must address the recipient. Sign with the sender name. Return JSON with keys: subject (string), body (string).',
+            'meeting' => 'You are an expert sales email writer. Write a short meeting request email (max 100 words). Greeting must address the recipient. Sign with the sender name. Return JSON with keys: subject (string), body (string).',
+            default => 'You are an expert cold email writer. Write a personalized cold email (max 150 words). First line must be "Hi {recipient}," using the recipient name — NOT the sender. Introduce yourself with the sender name/company. Sign with the sender. Return JSON with keys: subject (string), body (string).',
         };
 
         $openAi = $this->chat($system, "Write outreach for: {$context}");
 
+        $draft = null;
         if ($openAi) {
             try {
                 $parsed = json_decode($openAi, true);
                 if (isset($parsed['subject']) && isset($parsed['body'])) {
-                    return $this->applySenderPlaceholders($parsed, $yourName, $yourCompany);
+                    $draft = $parsed;
                 }
             } catch (\Throwable $e) {
                 // fall through
             }
         }
 
-        return $this->fallbackOutreach($lead, $type, $yourName, $yourCompany);
+        $draft ??= $this->fallbackOutreach($lead, $type, $yourName, $yourCompany, $recipient);
+        $draft = $this->applySenderPlaceholders($draft, $yourName, $yourCompany);
+
+        return $this->forceRecipientGreeting($draft, $recipient, $yourName);
+    }
+
+    /** Ensure opening greeting uses the lead contact, not the sender. */
+    private function forceRecipientGreeting(array $draft, string $recipient, string $senderName): array
+    {
+        $body = (string) ($draft['body'] ?? '');
+        if ($body === '') {
+            return $draft;
+        }
+
+        $greet = $recipient !== '' ? $recipient : 'there';
+        // If model put sender in the greeting, rewrite the first salutation line
+        $replaced = preg_replace(
+            '/^(Hi|Hello|Hey|Dear)\s+[^,\n]+(,)?/i',
+            'Hi '.$greet.'$2',
+            $body,
+            1,
+            $count,
+        );
+        if ($count > 0) {
+            // Normalize "Hi Name," comma
+            $replaced = preg_replace('/^(Hi\s+'.preg_quote($greet, '/').')(?!,)/i', '$1,', $replaced, 1);
+            $draft['body'] = $replaced;
+        }
+
+        // Extra guard: if greeting still equals sender, force rewrite
+        if ($senderName !== '' && preg_match('/^(Hi|Hello|Hey|Dear)\s+'.preg_quote($senderName, '/').'\b/i', $draft['body'])) {
+            $draft['body'] = preg_replace(
+                '/^(Hi|Hello|Hey|Dear)\s+'.preg_quote($senderName, '/').'(,)?/i',
+                'Hi '.$greet.',',
+                $draft['body'],
+                1,
+            );
+        }
+
+        return $draft;
     }
 
     /** Replace common AI/template placeholders with Settings values. */
@@ -200,36 +249,34 @@ class AIService
         return $draft;
     }
 
-    private function fallbackOutreach(Lead $lead, string $type, string $yourName = 'Your Name', string $yourCompany = ''): array
+    private function fallbackOutreach(Lead $lead, string $type, string $yourName = 'Your Name', string $yourCompany = '', string $recipient = 'there'): array
     {
         $company = $lead->company?->name ?? 'your company';
-        $contact = $lead->contact?->name ?? 'there';
         $appName = $lead->app?->name ?? 'your app';
         $sign = $yourCompany !== '' ? "{$yourName}\n{$yourCompany}" : $yourName;
         $intro = $yourCompany !== ''
             ? "My name is {$yourName} from {$yourCompany}"
             : "My name is {$yourName}";
+        $hi = $recipient !== '' ? $recipient : 'there';
 
-        $draft = match ($type) {
+        return match ($type) {
             'followup' => [
                 'subject' => "Re: {$appName}",
-                'body' => "Hi {$contact},\n\nI wanted to follow up on my earlier note about {$appName}. I know things get busy, but I'd love to share a quick audit that highlights a few quick wins for the app.\n\nWould 15 minutes next week work?\n\nBest,\n{$sign}",
+                'body' => "Hi {$hi},\n\nI wanted to follow up on my earlier note about {$appName}. I know things get busy, but I'd love to share a quick audit that highlights a few quick wins for the app.\n\nWould 15 minutes next week work?\n\nBest,\n{$sign}",
             ],
             'linkedin' => [
                 'subject' => 'Quick note',
-                'body' => "Hi {$contact},\n\nI came across {$appName} and was impressed by the traction. I help app teams like yours unlock faster growth. Would you be open to a quick chat?\n\nBest,\n{$sign}",
+                'body' => "Hi {$hi},\n\nI came across {$appName} and was impressed by the traction. I help app teams like yours unlock faster growth. Would you be open to a quick chat?\n\nBest,\n{$sign}",
             ],
             'meeting' => [
                 'subject' => "Meeting request: {$appName} audit",
-                'body' => "Hi {$contact},\n\nI've put together a free, 15-minute audit of {$appName}. Would you be open to a quick call this week or next to review the findings?\n\nBest,\n{$sign}",
+                'body' => "Hi {$hi},\n\nI've put together a free, 15-minute audit of {$appName}. Would you be open to a quick call this week or next to review the findings?\n\nBest,\n{$sign}",
             ],
             default => [
                 'subject' => "A quick idea for {$appName}",
-                'body' => "Hi {$contact},\n\nI hope this finds you well. {$intro}. I've been following {$appName} and noticed a few opportunities to improve user retention and monetization.\n\nI've prepared a short, actionable audit specific to {$appName} that I'd love to walk you through.\n\nWould you be open to a 15-minute call this week?\n\nBest,\n{$sign}",
+                'body' => "Hi {$hi},\n\nI hope this finds you well. {$intro}. I've been following {$appName} and noticed a few opportunities to improve user retention and monetization.\n\nI've prepared a short, actionable audit specific to {$appName} that I'd love to walk you through.\n\nWould you be open to a 15-minute call this week?\n\nBest,\n{$sign}",
             ],
         };
-
-        return $this->applySenderPlaceholders($draft, $yourName, $yourCompany);
     }
 
     public function scoreLead(Lead $lead): array
