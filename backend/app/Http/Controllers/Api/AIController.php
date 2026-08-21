@@ -73,8 +73,10 @@ class AIController extends Controller
         $lead = Lead::with('company', 'contact', 'app')->findOrFail($data['lead_id']);
         abort_unless($lead->user_id === $request->user()->id, 403, 'Not authorized');
 
+        $from = \App\Services\ResendMailService::resolveFrom($request->user()->id);
+
         return response()->json([
-            'draft' => $this->ai->generateOutreach($lead, $data['type']),
+            'draft' => $this->ai->generateOutreach($lead, $data['type'], $from),
             'ai_enabled' => $this->ai->isEnabled(),
         ]);
     }

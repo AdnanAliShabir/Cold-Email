@@ -48,6 +48,8 @@ class EmailController extends Controller
             return response()->json(['message' => 'Lead has no contact email'], 422);
         }
 
+        $from = ResendMailService::resolveFrom($request->user()->id);
+
         $email = Email::create([
             'user_id' => $request->user()->id,
             'lead_id' => $data['lead_id'],
@@ -55,7 +57,8 @@ class EmailController extends Controller
             'direction' => 'outbound',
             'subject' => $data['subject'],
             'body' => $data['body'],
-            'from_email' => config('mail.from.address'),
+            'from_email' => $from['from_email'],
+            'from_name' => $from['from_name'],
             'to_email' => $toEmail,
             'status' => $shouldSend ? 'sent' : ($data['status'] ?? 'draft'),
             'sent_at' => $shouldSend ? now() : null,
@@ -64,7 +67,7 @@ class EmailController extends Controller
 
         if ($shouldSend) {
             try {
-                $messageId = $this->deliver($email);
+                $messageId = $this->deliver($email, $from['from_name'], $from['from_email']);
                 $email->update([
                     'status' => 'sent',
                     'sent_at' => now(),
@@ -113,13 +116,12 @@ class EmailController extends Controller
         return response()->json(['email' => $email->fresh()]);
     }
 
-    private function deliver(Email $email): ?string
+    private function deliver(Email $email, ?string $fromName = null, ?string $fromAddress = null): ?string
     {
         if (config('services.resend.key')) {
-            return $this->resend->send($email);
+            return $this->resend->send($email, $fromName, $fromAddress);
         }
 
-        // Local/dev fallback: log driver (no real delivery, no provider id)
         Mail::raw($email->body, function ($message) use ($email) {
             $message->to($email->to_email)->subject($email->subject);
         });

@@ -3,12 +3,13 @@
 namespace App\Services;
 
 use App\Models\Email;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 class ResendMailService
 {
-    public function send(Email $email): string
+    public function send(Email $email, ?string $fromName = null, ?string $fromAddress = null): string
     {
         $apiKey = config('services.resend.key');
         if (! $apiKey) {
@@ -19,8 +20,14 @@ class ResendMailService
             throw new RuntimeException('Lead has no contact email');
         }
 
-        $fromAddress = config('mail.from.address');
-        $fromName = config('mail.from.name', 'LeadCRM');
+        $fromAddress = $fromAddress
+            ?: $email->from_email
+            ?: config('mail.from.address');
+
+        $fromName = $fromName
+            ?: $email->from_name
+            ?: config('mail.from.name', 'LeadCRM');
+
         $from = $fromName ? "{$fromName} <{$fromAddress}>" : $fromAddress;
 
         $html = nl2br(e($email->body));
@@ -51,5 +58,20 @@ class ResendMailService
         }
 
         return $id;
+    }
+
+    /** Resolve from-name / from-email for a user from settings + env defaults. */
+    public static function resolveFrom(int $userId): array
+    {
+        $settings = Setting::mapForUser($userId);
+
+        return [
+            'from_name' => $settings['sender_name']
+                ?? config('mail.from.name')
+                ?? 'LeadCRM',
+            'from_email' => $settings['from_email']
+                ?? config('mail.from.address'),
+            'company_name' => $settings['company_name'] ?? null,
+        ];
     }
 }

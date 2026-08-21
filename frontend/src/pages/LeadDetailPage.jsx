@@ -203,16 +203,43 @@ function Outreach({ lead, onUpdate }) {
   const [body, setBody] = useState('')
   const [aiDraft, setAiDraft] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
+  const [settings, setSettings] = useState({ sender_name: '', company_name: '', from_email: '' })
+  const [sending, setSending] = useState(false)
+
+  const toEmail = lead.contact?.email || ''
+
+  useEffect(() => {
+    api.get('/settings').then((res) => {
+      setSettings({
+        sender_name: res.data.settings?.sender_name || '',
+        company_name: res.data.settings?.company_name || '',
+        from_email: res.data.settings?.from_email || res.data.defaults?.from_email || '',
+      })
+    }).catch(() => {})
+  }, [])
+
+  // Refresh lead so webhook open/click statuses show up
+  useEffect(() => {
+    const id = setInterval(() => onUpdate?.(), 20000)
+    return () => clearInterval(id)
+  }, [onUpdate])
 
   const send = async () => {
+    if (!toEmail) {
+      alert('This lead has no contact email')
+      return
+    }
+    setSending(true)
     try {
       await api.post('/emails', { lead_id: lead.id, subject, body, send: true })
-      alert('Email sent via Resend')
+      alert('Email sent')
       setBody('')
       setSubject('')
       onUpdate?.()
     } catch (err) {
       alert(err?.response?.data?.message || 'Failed to send email')
+    } finally {
+      setSending(false)
     }
   }
 
@@ -228,24 +255,58 @@ function Outreach({ lead, onUpdate }) {
     }
   }
 
+  const statusColor = (status) => {
+    if (status === 'replied') return 'bg-emerald-100 text-emerald-700'
+    if (status === 'clicked') return 'bg-blue-100 text-blue-700'
+    if (status === 'opened') return 'bg-indigo-100 text-indigo-700'
+    if (status === 'sent') return 'bg-amber-100 text-amber-800'
+    return 'bg-gray-100 text-gray-700'
+  }
+
+  const statusLabel = (email) => {
+    if (email.status === 'opened' && email.opened_at) {
+      return `Opened · ${new Date(email.opened_at).toLocaleString()}`
+    }
+    if (email.status === 'clicked' && email.clicked_at) {
+      return `Clicked · ${new Date(email.clicked_at).toLocaleString()}`
+    }
+    if (email.status === 'sent' && email.sent_at) {
+      return `Sent · ${new Date(email.sent_at).toLocaleString()}`
+    }
+    return email.status
+  }
+
+  const fromPreview = settings.sender_name
+    ? `${settings.sender_name}${settings.company_name ? ` (${settings.company_name})` : ''} <${settings.from_email || '…'}>`
+    : (settings.from_email || 'Set your name in Settings')
+
   return (
     <div className="space-y-6">
-      <Card title="Email History">
-        {lead.emails?.length === 0 && <p className="text-sm text-gray-400">No emails yet</p>}
+      <Card title="Email History" action={
+        <button type="button" onClick={() => onUpdate?.()} className="text-xs text-emerald-700 hover:underline">Refresh status</button>
+      }>
+        {(!lead.emails || lead.emails.length === 0) && <p className="text-sm text-gray-400">No emails yet</p>}
         <div className="space-y-3">
           {[].concat(lead.emails || []).reverse().map((email) => (
             <div key={email.id} className="border rounded-lg p-3">
-              <div className="flex justify-between">
-                <p className="font-medium text-sm">{email.subject}</p>
-                <Badge color={
-                  email.status === 'replied' ? 'bg-emerald-100 text-emerald-700'
-                    : email.status === 'clicked' ? 'bg-blue-100 text-blue-700'
-                      : email.status === 'opened' ? 'bg-indigo-100 text-indigo-700'
-                        : 'bg-gray-100 text-gray-700'
-                }>{email.status}</Badge>
+              <div className="flex justify-between gap-3 items-start">
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">{email.subject}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    To: <span className="font-medium text-gray-700">{email.to_email || '—'}</span>
+                    {email.from_email && (
+                      <> · From: {email.from_name ? `${email.from_name} ` : ''}&lt;{email.from_email}&gt;</>
+                    )}
+                  </p>
+                </div>
+                <Badge color={statusColor(email.status)}>{statusLabel(email)}</Badge>
               </div>
-              <p className="text-xs text-gray-500 mt-2 whitespace-pre-line">{email.body}</p>
-              <p className="text-xs text-gray-400 mt-1">{new Date(email.created_at).toLocaleString()}</p>
+              <p className="text-xs text-gray-500 mt-2 whitespace-pre-line line-clamp-4">{email.body}</p>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400 mt-2">
+                <span>Created {new Date(email.created_at).toLocaleString()}</span>
+                {email.opened_at && <span>Opened {new Date(email.opened_at).toLocaleString()}</span>}
+                {email.clicked_at && <span>Clicked {new Date(email.clicked_at).toLocaleString()}</span>}
+              </div>
             </div>
           ))}
         </div>
@@ -253,6 +314,19 @@ function Outreach({ lead, onUpdate }) {
 
       <Card title="Compose Email">
         <div className="space-y-3">
+          <div className="rounded-lg border bg-slate-50 px-3 py-2 text-xs text-gray-600 space-y-1">
+            <p>
+              <span className="text-gray-400">To</span>{' '}
+              {toEmail ? <span className="font-medium text-gray-800">{toEmail}</span> : <span className="text-red-600">No contact email on this lead</span>}
+            </p>
+            <p>
+              <span className="text-gray-400">From</span>{' '}
+              <span className="font-medium text-gray-800">{fromPreview}</span>
+              {' · '}
+              <Link to="/settings" className="text-emerald-700 hover:underline">Edit in Settings</Link>
+            </p>
+          </div>
+
           <div className="flex gap-2 flex-wrap">
             {['cold', 'followup', 'linkedin', 'meeting'].map((t) => (
               <button key={t} onClick={() => generateAI(t)} disabled={aiLoading} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm hover:bg-indigo-100 disabled:opacity-50">
@@ -263,8 +337,12 @@ function Outreach({ lead, onUpdate }) {
           {aiDraft && <p className="text-xs text-gray-500">AI draft ready — edit below</p>}
           <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" className="w-full px-3 py-2 border rounded-lg text-sm" />
           <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message" rows={6} className="w-full px-3 py-2 border rounded-lg text-sm" />
-          <button onClick={send} disabled={!subject || !body} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
-            Send Email
+          <button
+            onClick={send}
+            disabled={!subject || !body || !toEmail || sending}
+            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {sending ? 'Sending…' : 'Send Email'}
           </button>
         </div>
       </Card>

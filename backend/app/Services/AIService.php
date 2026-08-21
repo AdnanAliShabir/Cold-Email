@@ -137,20 +137,23 @@ class AIService
         ];
     }
 
-    public function generateOutreach(Lead $lead, string $type = 'cold'): array
+    public function generateOutreach(Lead $lead, string $type = 'cold', array $sender = []): array
     {
         $company = $lead->company?->name ?? 'your company';
         $contact = $lead->contact?->name ?? 'there';
         $position = $lead->contact?->position ?? '';
         $appName = $lead->app?->name ?? 'your app';
+        $yourName = $sender['from_name'] ?? 'Your Name';
+        $yourCompany = $sender['company_name'] ?? '';
 
-        $context = "Company: {$company}. Contact: {$contact}, {$position}. App: {$appName}.";
+        $context = "Prospect company: {$company}. Contact: {$contact}, {$position}. App: {$appName}. "
+            ."Sign emails as: {$yourName}".($yourCompany ? " from {$yourCompany}" : '').'.';
 
         $system = match ($type) {
-            'followup' => 'You are an expert sales email writer. Write a short follow-up email (max 120 words). Return JSON with keys: subject (string), body (string).',
-            'linkedin' => 'You are an expert sales professional. Write a short LinkedIn connection message (max 80 words). Return JSON with keys: subject (string), body (string).',
-            'meeting' => 'You are an expert sales email writer. Write a short meeting request email (max 100 words). Return JSON with keys: subject (string), body (string).',
-            default => 'You are an expert cold email writer for a mobile app development agency. Write a personalized cold email (max 150 words). Return JSON with keys: subject (string), body (string).',
+            'followup' => 'You are an expert sales email writer. Write a short follow-up email (max 120 words). Sign with the provided sender name. Return JSON with keys: subject (string), body (string).',
+            'linkedin' => 'You are an expert sales professional. Write a short LinkedIn connection message (max 80 words). Sign with the provided sender name. Return JSON with keys: subject (string), body (string).',
+            'meeting' => 'You are an expert sales email writer. Write a short meeting request email (max 100 words). Sign with the provided sender name. Return JSON with keys: subject (string), body (string).',
+            default => 'You are an expert cold email writer for a mobile app development agency. Write a personalized cold email (max 150 words). Sign with the provided sender name/company. Return JSON with keys: subject (string), body (string).',
         };
 
         $openAi = $this->chat($system, "Write outreach for: {$context}");
@@ -166,32 +169,32 @@ class AIService
             }
         }
 
-        return $this->fallbackOutreach($lead, $type);
+        return $this->fallbackOutreach($lead, $type, $yourName, $yourCompany);
     }
 
-    private function fallbackOutreach(Lead $lead, string $type): array
+    private function fallbackOutreach(Lead $lead, string $type, string $yourName = 'Your Name', string $yourCompany = ''): array
     {
         $company = $lead->company?->name ?? 'your company';
         $contact = $lead->contact?->name ?? 'there';
-        $position = $lead->contact?->position ?? '';
         $appName = $lead->app?->name ?? 'your app';
+        $sign = $yourCompany ? "{$yourName}\n{$yourCompany}" : $yourName;
 
         return match ($type) {
             'followup' => [
                 'subject' => "Re: {$appName}",
-                'body' => "Hi {$contact},\n\nI wanted to follow up on my earlier note about {$appName}. I know things get busy, but I'd love to share a quick audit that highlights a few quick wins for the app.\n\nWould 15 minutes next week work?\n\nBest,\n[Your Name]",
+                'body' => "Hi {$contact},\n\nI wanted to follow up on my earlier note about {$appName}. I know things get busy, but I'd love to share a quick audit that highlights a few quick wins for the app.\n\nWould 15 minutes next week work?\n\nBest,\n{$sign}",
             ],
             'linkedin' => [
                 'subject' => 'Quick note',
-                'body' => "Hi {$contact},\n\nI came across {$appName} and was impressed by the traction. I help app teams like yours unlock faster growth. Would you be open to a quick chat?\n\nBest,\n[Your Name]",
+                'body' => "Hi {$contact},\n\nI came across {$appName} and was impressed by the traction. I help app teams like yours unlock faster growth. Would you be open to a quick chat?\n\nBest,\n{$sign}",
             ],
             'meeting' => [
                 'subject' => "Meeting request: {$appName} audit",
-                'body' => "Hi {$contact},\n\nI've put together a free, 15-minute audit of {$appName}. Would you be open to a quick call this week or next to review the findings?\n\nBest,\n[Your Name]",
+                'body' => "Hi {$contact},\n\nI've put together a free, 15-minute audit of {$appName}. Would you be open to a quick call this week or next to review the findings?\n\nBest,\n{$sign}",
             ],
             default => [
                 'subject' => "A quick idea for {$appName}",
-                'body' => "Hi {$contact},\n\nI hope this finds you well. My name is [Your Name] from [Your Agency]. I've been following {$appName} and noticed a few opportunities to improve user retention and monetization.\n\nI've prepared a short, actionable audit specific to {$appName} that I'd love to walk you through.\n\nWould you be open to a 15-minute call this week?\n\nBest,\n[Your Name]",
+                'body' => "Hi {$contact},\n\nI hope this finds you well. My name is {$yourName}".($yourCompany ? " from {$yourCompany}" : '').". I've been following {$appName} and noticed a few opportunities to improve user retention and monetization.\n\nI've prepared a short, actionable audit specific to {$appName} that I'd love to walk you through.\n\nWould you be open to a 15-minute call this week?\n\nBest,\n{$sign}",
             ],
         };
     }

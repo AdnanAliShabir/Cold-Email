@@ -11,6 +11,7 @@ import StatisticsPage from './pages/StatisticsPage'
 import AIToolsPage from './pages/AIToolsPage'
 import FollowUpsPage from './pages/FollowUpsPage'
 import TemplatesPage from './pages/TemplatesPage'
+import SettingsPage from './pages/SettingsPage'
 
 function Protected({ children }) {
   const { user } = useAuth()
@@ -41,6 +42,7 @@ function App() {
             <Route path="statistics" element={<StatisticsPage />} />
             <Route path="ai" element={<AIToolsPage />} />
             <Route path="templates" element={<TemplatesPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
