@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import api from '../api/client'
 import { Card, Badge, Spinner } from '../components/ui'
@@ -13,10 +13,19 @@ function LeadDetailPage() {
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
 
-  const fetchLead = () => {
-    api.get(`/leads/${id}`).then((res) => setLead(res.data.lead)).catch(() => setError('Failed to load lead'))
-  }
-  useEffect(() => { fetchLead() }, [id])
+  const fetchLead = useCallback(() => {
+    return api.get(`/leads/${id}`)
+      .then((res) => {
+        setLead(res.data.lead)
+        return res.data.lead
+      })
+      .catch(() => {
+        setError('Failed to load lead')
+        return null
+      })
+  }, [id])
+
+  useEffect(() => { fetchLead() }, [fetchLead])
 
   const addNote = async () => {
     if (!note.trim()) return
@@ -208,6 +217,19 @@ function Outreach({ lead, onUpdate }) {
 
   const toEmail = lead.contact?.email || ''
 
+  const applySender = (text) => {
+    if (!text) return text
+    const name = settings.sender_name?.trim() || 'Your Name'
+    const agency = settings.company_name?.trim() || name
+    return String(text)
+      .replace(/\[Your Name\]/gi, name)
+      .replace(/\[Your Agency\]/gi, agency)
+      .replace(/\[Your Company\]/gi, agency)
+      .replace(/\{\{\s*your_name\s*\}\}/gi, name)
+      .replace(/\{\{\s*company_name\s*\}\}/gi, agency)
+      .replace(/\{\{\s*your_company\s*\}\}/gi, agency)
+  }
+
   useEffect(() => {
     api.get('/settings').then((res) => {
       setSettings({
@@ -220,8 +242,9 @@ function Outreach({ lead, onUpdate }) {
 
   // Refresh lead so webhook open/click statuses show up
   useEffect(() => {
-    const id = setInterval(() => onUpdate?.(), 20000)
-    return () => clearInterval(id)
+    if (!onUpdate) return undefined
+    const timer = setInterval(() => { onUpdate() }, 20000)
+    return () => clearInterval(timer)
   }, [onUpdate])
 
   const send = async () => {
@@ -231,11 +254,15 @@ function Outreach({ lead, onUpdate }) {
     }
     setSending(true)
     try {
-      await api.post('/emails', { lead_id: lead.id, subject, body, send: true })
-      alert('Email sent')
+      const res = await api.post('/emails', { lead_id: lead.id, subject, body, send: true })
       setBody('')
       setSubject('')
-      onUpdate?.()
+      setAiDraft(null)
+      // Prefer server email list refresh; fall back to optimistic insert
+      const updated = await onUpdate?.()
+      if (!updated && res.data?.email) {
+        // parent fetch may not return; parent still updates state via setLead
+      }
     } catch (err) {
       alert(err?.response?.data?.message || 'Failed to send email')
     } finally {
@@ -247,9 +274,12 @@ function Outreach({ lead, onUpdate }) {
     setAiLoading(true)
     try {
       const res = await api.post('/ai/outreach', { lead_id: lead.id, type })
-      setAiDraft(res.data.draft)
-      setSubject(res.data.draft.subject)
-      setBody(res.data.draft.body)
+      const draft = res.data.draft || {}
+      const nextSubject = applySender(draft.subject || '')
+      const nextBody = applySender(draft.body || '')
+      setAiDraft({ ...draft, subject: nextSubject, body: nextBody })
+      setSubject(nextSubject)
+      setBody(nextBody)
     } finally {
       setAiLoading(false)
     }

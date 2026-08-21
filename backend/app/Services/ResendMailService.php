@@ -64,14 +64,18 @@ class ResendMailService
     public static function resolveFrom(int $userId): array
     {
         $settings = Setting::mapForUser($userId);
+        $senderName = trim((string) ($settings['sender_name'] ?? ''));
+        $companyName = trim((string) ($settings['company_name'] ?? ''));
+        $fromEmail = trim((string) ($settings['from_email'] ?? ''));
 
         return [
-            'from_name' => $settings['sender_name']
-                ?? config('mail.from.name')
-                ?? 'LeadCRM',
-            'from_email' => $settings['from_email']
-                ?? config('mail.from.address'),
-            'company_name' => $settings['company_name'] ?? null,
+            'from_name' => $senderName !== ''
+                ? $senderName
+                : (config('mail.from.name') ?: 'LeadCRM'),
+            'from_email' => $fromEmail !== ''
+                ? $fromEmail
+                : config('mail.from.address'),
+            'company_name' => $companyName !== '' ? $companyName : null,
         ];
     }
 }

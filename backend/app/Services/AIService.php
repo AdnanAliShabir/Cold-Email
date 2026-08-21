@@ -143,17 +143,18 @@ class AIService
         $contact = $lead->contact?->name ?? 'there';
         $position = $lead->contact?->position ?? '';
         $appName = $lead->app?->name ?? 'your app';
-        $yourName = $sender['from_name'] ?? 'Your Name';
-        $yourCompany = $sender['company_name'] ?? '';
+        $yourName = trim((string) ($sender['from_name'] ?? '')) ?: 'Your Name';
+        $yourCompany = trim((string) ($sender['company_name'] ?? ''));
 
         $context = "Prospect company: {$company}. Contact: {$contact}, {$position}. App: {$appName}. "
-            ."Sign emails as: {$yourName}".($yourCompany ? " from {$yourCompany}" : '').'.';
+            ."IMPORTANT: Sign the email as \"{$yourName}\"".($yourCompany ? " from \"{$yourCompany}\"" : '')
+            .'. Never use placeholders like [Your Name] or [Your Agency].';
 
         $system = match ($type) {
-            'followup' => 'You are an expert sales email writer. Write a short follow-up email (max 120 words). Sign with the provided sender name. Return JSON with keys: subject (string), body (string).',
-            'linkedin' => 'You are an expert sales professional. Write a short LinkedIn connection message (max 80 words). Sign with the provided sender name. Return JSON with keys: subject (string), body (string).',
-            'meeting' => 'You are an expert sales email writer. Write a short meeting request email (max 100 words). Sign with the provided sender name. Return JSON with keys: subject (string), body (string).',
-            default => 'You are an expert cold email writer for a mobile app development agency. Write a personalized cold email (max 150 words). Sign with the provided sender name/company. Return JSON with keys: subject (string), body (string).',
+            'followup' => 'You are an expert sales email writer. Write a short follow-up email (max 120 words). Always sign with the exact sender name (and company if given). Never use bracket placeholders. Return JSON with keys: subject (string), body (string).',
+            'linkedin' => 'You are an expert sales professional. Write a short LinkedIn connection message (max 80 words). Always sign with the exact sender name (and company if given). Never use bracket placeholders. Return JSON with keys: subject (string), body (string).',
+            'meeting' => 'You are an expert sales email writer. Write a short meeting request email (max 100 words). Always sign with the exact sender name (and company if given). Never use bracket placeholders. Return JSON with keys: subject (string), body (string).',
+            default => 'You are an expert cold email writer for a mobile app development agency. Write a personalized cold email (max 150 words). Introduce yourself with the exact sender name and company provided. Never use placeholders like [Your Name] or [Your Agency]. Return JSON with keys: subject (string), body (string).',
         };
 
         $openAi = $this->chat($system, "Write outreach for: {$context}");
@@ -162,7 +163,7 @@ class AIService
             try {
                 $parsed = json_decode($openAi, true);
                 if (isset($parsed['subject']) && isset($parsed['body'])) {
-                    return $parsed;
+                    return $this->applySenderPlaceholders($parsed, $yourName, $yourCompany);
                 }
             } catch (\Throwable $e) {
                 // fall through
@@ -172,14 +173,44 @@ class AIService
         return $this->fallbackOutreach($lead, $type, $yourName, $yourCompany);
     }
 
+    /** Replace common AI/template placeholders with Settings values. */
+    private function applySenderPlaceholders(array $draft, string $yourName, string $yourCompany = ''): array
+    {
+        $agency = $yourCompany !== '' ? $yourCompany : $yourName;
+        $replacements = [
+            '[Your Name]' => $yourName,
+            '[your name]' => $yourName,
+            '[YOUR NAME]' => $yourName,
+            '[Your Agency]' => $agency,
+            '[your agency]' => $agency,
+            '[Your Company]' => $agency,
+            '[your company]' => $agency,
+            '{{your_name}}' => $yourName,
+            '{{company_name}}' => $agency,
+            '{{your_company}}' => $agency,
+        ];
+
+        foreach (['subject', 'body'] as $field) {
+            if (! isset($draft[$field]) || ! is_string($draft[$field])) {
+                continue;
+            }
+            $draft[$field] = str_replace(array_keys($replacements), array_values($replacements), $draft[$field]);
+        }
+
+        return $draft;
+    }
+
     private function fallbackOutreach(Lead $lead, string $type, string $yourName = 'Your Name', string $yourCompany = ''): array
     {
         $company = $lead->company?->name ?? 'your company';
         $contact = $lead->contact?->name ?? 'there';
         $appName = $lead->app?->name ?? 'your app';
-        $sign = $yourCompany ? "{$yourName}\n{$yourCompany}" : $yourName;
+        $sign = $yourCompany !== '' ? "{$yourName}\n{$yourCompany}" : $yourName;
+        $intro = $yourCompany !== ''
+            ? "My name is {$yourName} from {$yourCompany}"
+            : "My name is {$yourName}";
 
-        return match ($type) {
+        $draft = match ($type) {
             'followup' => [
                 'subject' => "Re: {$appName}",
                 'body' => "Hi {$contact},\n\nI wanted to follow up on my earlier note about {$appName}. I know things get busy, but I'd love to share a quick audit that highlights a few quick wins for the app.\n\nWould 15 minutes next week work?\n\nBest,\n{$sign}",
@@ -194,9 +225,11 @@ class AIService
             ],
             default => [
                 'subject' => "A quick idea for {$appName}",
-                'body' => "Hi {$contact},\n\nI hope this finds you well. My name is {$yourName}".($yourCompany ? " from {$yourCompany}" : '').". I've been following {$appName} and noticed a few opportunities to improve user retention and monetization.\n\nI've prepared a short, actionable audit specific to {$appName} that I'd love to walk you through.\n\nWould you be open to a 15-minute call this week?\n\nBest,\n{$sign}",
+                'body' => "Hi {$contact},\n\nI hope this finds you well. {$intro}. I've been following {$appName} and noticed a few opportunities to improve user retention and monetization.\n\nI've prepared a short, actionable audit specific to {$appName} that I'd love to walk you through.\n\nWould you be open to a 15-minute call this week?\n\nBest,\n{$sign}",
             ],
         };
+
+        return $this->applySenderPlaceholders($draft, $yourName, $yourCompany);
     }
 
     public function scoreLead(Lead $lead): array
