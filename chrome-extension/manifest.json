@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "LeadCRM Store Extractor",
+  "version": "1.0.0",
+  "description": "Extract app metadata from Google Play and App Store pages and send it to LeadCRM.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://play.google.com/*",
+    "https://apps.apple.com/*",
+    "https://itunes.apple.com/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LeadCRM Store Extractor",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://play.google.com/store/apps/details*",
+        "https://apps.apple.com/*/app/*",
+        "https://apps.apple.com/app/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

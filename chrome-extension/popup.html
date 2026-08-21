@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LeadCRM Store Extractor</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>LeadCRM Extractor</h1>
+      <span id="platformBadge" class="badge hidden"></span>
+    </header>
+
+    <div id="settings" class="setting-row">
+      <input id="apiToken" type="password" placeholder="Your LeadCRM API token" autocomplete="off" />
+      <button id="saveToken" class="btn btn-secondary">Save</button>
+    </div>
+    <p class="hint" id="status"></p>
+
+    <div id="emptyState" class="state hidden">
+      <p>Open a <strong>Google Play</strong> or <strong>App Store</strong> app page, then click "Re-extract".</p>
+    </div>
+
+    <div id="form" class="hidden">
+      <div class="app-summary">
+        <img id="appIcon" alt="" />
+        <div>
+          <strong id="appName"></strong>
+          <span id="appMeta" class="meta"></span>
+        </div>
+      </div>
+
+      <label>App name
+        <input id="fName" />
+      </label>
+      <label>Company / Developer
+        <input id="fCompany" />
+      </label>
+      <label>App Store URL
+        <input id="fUrl" />
+      </label>
+      <div class="row">
+        <label>Rating
+          <input id="fRating" type="number" step="0.1" min="0" max="5" />
+        </label>
+        <label>Reviews
+          <input id="fReviews" type="number" />
+        </label>
+      </div>
+      <div class="row">
+        <label>Downloads
+          <input id="fDownloads" type="number" />
+        </label>
+        <label>Version
+          <input id="fVersion" />
+        </label>
+      </div>
+      <label>Last updated
+        <input id="fUpdated" />
+      </label>
+      <div class="row">
+        <label>Contact name
+          <input id="fContact" placeholder="(optional)" />
+        </label>
+        <label>Contact email
+          <input id="fEmail" placeholder="(optional)" />
+        </label>
+      </div>
+      <div class="row">
+        <label>Source
+          <select id="fSource">
+            <option>Play Store Search</option>
+            <option>App Store Search</option>
+            <option>Website Discovery</option>
+            <option>LinkedIn</option>
+            <option>Cold Email</option>
+            <option>Chrome Extension</option>
+          </select>
+        </label>
+        <label>Priority
+          <select id="fPriority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+      </div>
+
+      <button id="sendToCrm" class="btn btn-primary">Send to LeadCRM</button>
+      <button id="reextract" class="btn btn-secondary">Re-extract from page</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
