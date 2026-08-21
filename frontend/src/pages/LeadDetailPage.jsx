@@ -252,12 +252,21 @@ function Outreach({ lead, onUpdate }) {
     }).catch(() => {})
   }, [])
 
-  // Refresh lead so webhook open/click statuses show up
+  // Refresh lead so open/click statuses show up (server also syncs from Resend)
   useEffect(() => {
     if (!onUpdate) return undefined
     const timer = setInterval(() => { onUpdate() }, 20000)
     return () => clearInterval(timer)
   }, [onUpdate])
+
+  const refreshStatus = async () => {
+    try {
+      await api.post('/emails/sync-tracking', { lead_id: lead.id })
+    } catch {
+      // sync is best-effort; still reload lead
+    }
+    await onUpdate?.()
+  }
 
   const send = async () => {
     if (!toEmail) {
@@ -321,7 +330,7 @@ function Outreach({ lead, onUpdate }) {
   return (
     <div className="space-y-6">
       <Card title="Email History" action={
-        <button type="button" onClick={() => onUpdate?.()} className="text-xs text-emerald-700 hover:underline">Refresh status</button>
+        <button type="button" onClick={refreshStatus} className="text-xs text-emerald-700 hover:underline">Refresh status</button>
       }>
         {(!lead.emails || lead.emails.length === 0) && <p className="text-sm text-gray-400">No emails yet</p>}
         <div className="space-y-3">

@@ -7,12 +7,15 @@ use App\Models\Company;
 use App\Models\Contact;
 use App\Models\App;
 use App\Models\Lead;
+use App\Services\EmailTrackingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class LeadController extends Controller
 {
+    public function __construct(private EmailTrackingService $emailTracking) {}
+
     private const VALID_STAGES = [
         'new_lead', 'researching', 'audit_ready', 'contacted', 'followup_1',
         'followup_2', 'meeting', 'proposal_sent', 'negotiation', 'won', 'lost',
@@ -95,6 +98,14 @@ class LeadController extends Controller
     public function show(Request $request, Lead $lead): JsonResponse
     {
         $this->authorize($request, $lead);
+
+        // Pull open/click from Resend so UI stays accurate even without webhooks
+        try {
+            $this->emailTracking->syncLead($lead);
+        } catch (\Throwable $e) {
+            // never block lead view on tracking sync
+        }
+
         $lead->load(['company.contacts', 'contact', 'app', 'emails', 'meetings', 'notes', 'followups', 'proposals', 'tasks', 'audits.items', 'activities']);
 
         return response()->json(['lead' => $this->transform($lead, true)]);

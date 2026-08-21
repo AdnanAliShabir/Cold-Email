@@ -50,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('templates', EmailTemplateController::class);
 
+    Route::post('emails/sync-tracking', [EmailController::class, 'syncTracking']);
     Route::apiResource('emails', EmailController::class)->only(['index', 'store']);
     Route::put('emails/{email}/status', [EmailController::class, 'updateStatus']);
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Email;
 use App\Models\Lead;
+use App\Services\EmailTrackingService;
 use App\Services\ResendMailService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,7 +14,10 @@ use Illuminate\Support\Facades\Mail;
 
 class EmailController extends Controller
 {
-    public function __construct(private ResendMailService $resend) {}
+    public function __construct(
+        private ResendMailService $resend,
+        private EmailTrackingService $tracking,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -114,6 +118,26 @@ class EmailController extends Controller
         ]);
 
         return response()->json(['email' => $email->fresh()]);
+    }
+
+    /**
+     * Pull open/click state from Resend for a lead (works even if webhooks are missing).
+     */
+    public function syncTracking(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'lead_id' => ['required', 'exists:leads,id'],
+        ]);
+
+        $lead = Lead::findOrFail($data['lead_id']);
+        abort_unless($lead->user_id === $request->user()->id, 403, 'Not authorized');
+
+        $updated = $this->tracking->syncLead($lead);
+
+        return response()->json([
+            'updated' => $updated,
+            'emails' => $lead->emails()->orderByDesc('created_at')->get(),
+        ]);
     }
 
     private function deliver(Email $email, ?string $fromName = null, ?string $fromAddress = null): ?string
