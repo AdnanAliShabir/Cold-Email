@@ -12,14 +12,17 @@
       <span id="platformBadge" class="badge hidden"></span>
     </header>
 
+    <label class="tiny">API base URL
+      <input id="apiBase" type="url" placeholder="https://your-api.onrender.com/api" autocomplete="off" />
+    </label>
     <div id="settings" class="setting-row">
       <input id="apiToken" type="password" placeholder="Your LeadCRM API token" autocomplete="off" />
-      <button id="saveToken" class="btn btn-secondary">Save</button>
+      <button id="saveToken" class="btn btn-secondary btn-inline">Save</button>
     </div>
     <p class="hint" id="status"></p>
 
     <div id="emptyState" class="state hidden">
-      <p>Open a <strong>Google Play</strong> or <strong>App Store</strong> app page, then click "Re-extract".</p>
+      <p>Open a <strong>Google Play</strong> or <strong>App Store</strong> app details page, then click Re-extract.</p>
     </div>
 
     <div id="form" class="hidden">
@@ -37,7 +40,10 @@
       <label>Company / Developer
         <input id="fCompany" />
       </label>
-      <label>App Store URL
+      <label>Website
+        <input id="fWebsite" placeholder="https://..." />
+      </label>
+      <label>Store URL
         <input id="fUrl" />
       </label>
       <div class="row">
@@ -85,6 +91,11 @@
             <option value="high">High</option>
           </select>
         </label>
+      </div>
+
+      <div id="liActions" class="li-actions hidden">
+        <button id="openLiPeople" type="button" class="btn btn-secondary">Find people on LinkedIn</button>
+        <button id="openLiCompany" type="button" class="btn btn-secondary">Find company on LinkedIn</button>
       </div>
 
       <button id="sendToCrm" class="btn btn-primary">Send to LeadCRM</button>

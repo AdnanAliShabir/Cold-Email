@@ -68,7 +68,7 @@ class PipelineController extends Controller
         $lead->activities()->create([
             'user_id' => $lead->user_id,
             'type' => 'stage_changed',
-            'description' => "Moved from {$newStage} to {$newStage}",
+            'description' => "Moved from {$oldStage} to {$newStage}",
             'metadata' => ['from' => $oldStage, 'to' => $newStage],
         ]);
 

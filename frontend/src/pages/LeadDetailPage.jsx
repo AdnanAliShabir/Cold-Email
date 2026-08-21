@@ -84,8 +84,47 @@ function LeadDetailPage() {
 }
 
 function Overview({ lead }) {
+  const company = lead.company?.name || lead.app?.name || ''
+  const contactName = lead.contact?.name || ''
+  const peopleQuery = encodeURIComponent(
+    [contactName, 'Founder OR CEO OR "Product Manager"', company].filter(Boolean).join(' '),
+  )
+  const companyQuery = encodeURIComponent(company)
+  const linkedInPeople = `https://www.linkedin.com/search/results/people/?keywords=${peopleQuery}`
+  const linkedInCompany = `https://www.linkedin.com/search/results/companies/?keywords=${companyQuery}`
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="space-y-6">
+      <Card title="Hunt shortcuts">
+        <p className="text-sm text-slate-500 mb-3">
+          LinkedIn does not allow scraping — open these searches, copy the profile URL into Contact, then draft outreach.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <a href={linkedInPeople} target="_blank" rel="noreferrer" className="px-3 py-2 text-sm bg-sky-600 text-white rounded-lg hover:bg-sky-700">
+            Find people on LinkedIn
+          </a>
+          <a href={linkedInCompany} target="_blank" rel="noreferrer" className="px-3 py-2 text-sm bg-sky-50 text-sky-800 border border-sky-200 rounded-lg hover:bg-sky-100">
+            Find company on LinkedIn
+          </a>
+          {lead.company?.website && (
+            <a href={lead.company.website.startsWith('http') ? lead.company.website : `https://${lead.company.website}`} target="_blank" rel="noreferrer" className="px-3 py-2 text-sm border rounded-lg hover:bg-slate-50">
+              Open website
+            </a>
+          )}
+          {lead.app?.google_play_url && (
+            <a href={lead.app.google_play_url} target="_blank" rel="noreferrer" className="px-3 py-2 text-sm border rounded-lg hover:bg-slate-50">
+              Play Store
+            </a>
+          )}
+          {lead.app?.app_store_url && (
+            <a href={lead.app.app_store_url} target="_blank" rel="noreferrer" className="px-3 py-2 text-sm border rounded-lg hover:bg-slate-50">
+              App Store
+            </a>
+          )}
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card title="Company">
         <dl className="space-y-2 text-sm">
           {[
@@ -111,9 +150,13 @@ function Overview({ lead }) {
             ['Phone', lead.contact?.phone],
             ['LinkedIn', lead.contact?.linkedin],
           ].map(([k, v]) => (
-            <div key={k} className="flex justify-between border-b border-gray-100 pb-2">
-              <dt className="text-gray-500">{k}</dt>
-              <dd className="font-medium">{v || '—'}</dd>
+            <div key={k} className="flex justify-between border-b border-gray-100 pb-2 gap-4">
+              <dt className="text-gray-500 shrink-0">{k}</dt>
+              <dd className="font-medium text-right break-all">
+                {k === 'LinkedIn' && v ? (
+                  <a href={v} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline">{v}</a>
+                ) : (v || '—')}
+              </dd>
             </div>
           ))}
         </dl>
@@ -150,6 +193,7 @@ function Overview({ lead }) {
           ))}
         </dl>
       </Card>
+      </div>
     </div>
   )
 }
@@ -199,8 +243,8 @@ function Outreach({ lead }) {
 
       <Card title="Compose Email">
         <div className="space-y-3">
-          <div className="flex gap-2">
-            {['cold', 'followup', 'meeting'].map((t) => (
+          <div className="flex gap-2 flex-wrap">
+            {['cold', 'followup', 'linkedin', 'meeting'].map((t) => (
               <button key={t} onClick={() => generateAI(t)} disabled={aiLoading} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm hover:bg-indigo-100 disabled:opacity-50">
                 {aiLoading ? '...' : `AI ${t}`}
               </button>

@@ -9,6 +9,7 @@ import LeadDetailPage from './pages/LeadDetailPage'
 import PipelinePage from './pages/PipelinePage'
 import StatisticsPage from './pages/StatisticsPage'
 import AIToolsPage from './pages/AIToolsPage'
+import FollowUpsPage from './pages/FollowUpsPage'
 import TemplatesPage from './pages/TemplatesPage'
 
 function Protected({ children }) {
@@ -36,6 +37,7 @@ function App() {
             <Route path="leads" element={<LeadsPage />} />
             <Route path="leads/:id" element={<LeadDetailPage />} />
             <Route path="pipeline" element={<PipelinePage />} />
+            <Route path="followups" element={<FollowUpsPage />} />
             <Route path="statistics" element={<StatisticsPage />} />
             <Route path="ai" element={<AIToolsPage />} />
             <Route path="templates" element={<TemplatesPage />} />

@@ -12,7 +12,10 @@ header h1 { font-size: 15px; font-weight: 700; }
 .badge.google_play { background: #0f9d58; color: #fff; }
 .badge.app_store { background: #0a84ff; color: #fff; }
 
+.tiny { font-size: 11px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px; }
 .setting-row { display: flex; gap: 6px; margin-bottom: 4px; }
+.btn-inline { width: auto; margin-top: 0; padding: 7px 10px; white-space: nowrap; }
+.li-actions { display: grid; gap: 6px; margin-top: 8px; }
 .hint { font-size: 11px; color: #6b7280; min-height: 16px; }
 .hint.ok { color: #059669; }
 .hint.err { color: #dc2626; }

@@ -53,7 +53,7 @@ function LeadFormModal({ onClose, onCreated }) {
           {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>}
 
           <div>
-            <h3 className={section}>Company</h3>
+            <h3 className={sectionLabel}>Company</h3>
             <div className="grid grid-cols-2 gap-3">
               <input value={form.company.name} onChange={(e) => set('company', 'name', e.target.value)} placeholder="Company name*" className={input} required />
               <input value={form.company.website} onChange={(e) => set('company', 'website', e.target.value)} placeholder="Website" className={input} />
@@ -65,7 +65,7 @@ function LeadFormModal({ onClose, onCreated }) {
           </div>
 
           <div>
-            <h3 className={section}>Contact</h3>
+            <h3 className={sectionLabel}>Contact</h3>
             <div className="grid grid-cols-2 gap-3">
               <input value={form.contact.name} onChange={(e) => set('contact', 'name', e.target.value)} placeholder="Contact name" className={input} required />
               <input value={form.contact.position} onChange={(e) => set('contact', 'position', e.target.value)} placeholder="Position" className={input} />
@@ -76,7 +76,7 @@ function LeadFormModal({ onClose, onCreated }) {
           </div>
 
           <div>
-            <h3 className={section}>App</h3>
+            <h3 className={sectionLabel}>App</h3>
             <div className="grid grid-cols-2 gap-3">
               <input value={form.app.name} onChange={(e) => set('app', 'name', e.target.value)} placeholder="App name" className={input} />
               <input value={form.app.current_version} onChange={(e) => set('app', 'current_version', e.target.value)} placeholder="Current version" className={input} />
@@ -89,7 +89,7 @@ function LeadFormModal({ onClose, onCreated }) {
           </div>
 
           <div>
-            <h3 className={section}>Business</h3>
+            <h3 className={sectionLabel}>Business</h3>
             <div className="grid grid-cols-2 gap-3">
               <select value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} className={input}>
                 <option value="low">Low priority</option>

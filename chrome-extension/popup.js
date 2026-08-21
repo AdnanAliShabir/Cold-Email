@@ -1,13 +1,16 @@
 /* eslint-disable no-undef */
-const API_BASE = 'http://127.0.0.1:8000/api'
+const DEFAULT_API = 'https://cold-outreach-api-ijrk.onrender.com/api'
 let current = null
 let apiToken = ''
+let apiBase = DEFAULT_API
 
 const $ = (id) => document.getElementById(id)
 
-chrome.storage.local.get(['apiToken', 'lastExtracted'], (res) => {
+chrome.storage.local.get(['apiToken', 'apiBase', 'lastExtracted'], (res) => {
   apiToken = res.apiToken || ''
+  apiBase = (res.apiBase || DEFAULT_API).replace(/\/$/, '')
   $('apiToken').value = apiToken
+  $('apiBase').value = apiBase
   const last = res.lastExtracted
   if (last) render(last)
   else ensureFresh()
@@ -41,16 +44,17 @@ function render(data) {
   $('emptyState').classList.add('hidden')
   $('appIcon').src = data.icon || ''
   $('appName').textContent = data.name || data.app_id || 'Unknown app'
-  const reviews = data.review_count ? data.review_count.toLocaleString() : 'n/a'
-  const downloads = data.android_downloads ? data.android_downloads.toLocaleString() : 'n/a'
+  const reviews = data.review_count ? Number(data.review_count).toLocaleString() : 'n/a'
+  const downloads = data.android_downloads || data.ios_downloads
   $('appMeta').textContent = [
-    data.rating ? data.rating + '★' : null,
+    data.rating != null ? data.rating + '★' : null,
     reviews + ' reviews',
-    'downloads: ' + downloads,
+    downloads ? ('downloads: ' + Number(downloads).toLocaleString()) : null,
   ].filter(Boolean).join(' · ')
 
   $('fName').value = data.name || ''
   $('fCompany').value = (data.company && data.company.name) || data.developer || ''
+  $('fWebsite').value = (data.company && data.company.website) || (data.developer_contact && data.developer_contact.website) || ''
   $('fUrl').value = data.url || ''
   $('fRating').value = data.rating ?? ''
   $('fReviews').value = data.review_count ?? ''
@@ -58,28 +62,40 @@ function render(data) {
   $('fVersion').value = data.current_version || ''
   $('fUpdated').value = data.last_updated || ''
   const devContact = data.developer_contact || {}
-  $('fContact').value = devContact.name || ''
+  $('fContact').value = devContact.name || data.developer || ''
   $('fEmail').value = devContact.email || ''
+
+  const hasLi = !!(data.linkedin_people_search || data.linkedin_company_search)
+  $('liActions').classList.toggle('hidden', !hasLi)
 }
 
 function ensureFresh() {
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+  chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
     const tab = tabs[0]
-    if (!tab || !tab.id) return
-    chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_NOW' }, (res) => {
-      if (chrome.runtime.lastError) {
-        // content script not present on this page
-        $('form').classList.add('hidden')
-        $('emptyState').classList.remove('hidden')
-        return
-      }
-      if (res && res.data) {
-        render(res.data)
-      } else {
-        $('form').classList.add('hidden')
-        $('emptyState').classList.remove('hidden')
-      }
+    if (!tab?.id) return
+
+    const tryMessage = () => new Promise((resolve) => {
+      chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_NOW' }, (res) => {
+        if (chrome.runtime.lastError) resolve(null)
+        else resolve(res)
+      })
     })
+
+    let res = await tryMessage()
+    if (!res) {
+      try {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] })
+        res = await tryMessage()
+      } catch (_) {
+        /* not a store page or no permission */
+      }
+    }
+
+    if (res?.data) render(res.data)
+    else {
+      $('form').classList.add('hidden')
+      $('emptyState').classList.remove('hidden')
+    }
   })
 }
 
@@ -88,8 +104,6 @@ function buildPayload() {
     const n = Number(v)
     return Number.isFinite(n) && n !== 0 ? n : fallback
   }
-  // Ensure numeric fields always post a value (apps.review_count is NOT NULL
-  // and rated 0..5). Null/empty input falls back to the given default.
   const platform = current ? current.platform : 'google_play'
   const isPlay = platform === 'google_play'
 
@@ -109,21 +123,26 @@ function buildPayload() {
   }
 
   const scrapedCompany = (current && current.company) || {}
+  const downloads = num($('fDownloads').value)
   return {
     company: {
       name: $('fCompany').value || $('fName').value,
-      website: scrapedCompany.website || '',
-      industry: '',
+      website: $('fWebsite').value || scrapedCompany.website || '',
+      industry: scrapedCompany.industry || current?.category || '',
       country: scrapedCompany.country || '',
     },
     contact: {
       name: $('fContact').value,
       position: '',
       email: $('fEmail').value,
+      linkedin: '',
     },
     app,
-    source: $('fSource').value,
+    source: $('fSource').value || 'Chrome Extension',
     priority: $('fPriority').value,
+    estimated_budget: downloads
+      ? Math.max(8000, Math.min(50000, Math.round(downloads * 0.02)))
+      : null,
   }
 }
 
@@ -136,26 +155,27 @@ async function sendToCrm() {
   btn.disabled = true
   setStatus('Sending...')
   try {
-    const res = await fetch(API_BASE + '/leads', {
+    const res = await fetch(apiBase + '/leads', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': 'Bearer ' + apiToken,
+        Accept: 'application/json',
+        Authorization: 'Bearer ' + apiToken,
       },
       body: JSON.stringify(buildPayload()),
     })
-    const data = await res.json()
+    let data = {}
+    try { data = await res.json() } catch (_) { /* non-json */ }
     if (!res.ok) {
       const detail = data.error || data.message || ('HTTP ' + res.status)
       setStatus('Error: ' + detail, 'err')
       return
     }
     const id = data.lead ? data.lead.id : '?'
-    setStatus('Lead #' + id + ' created successfully.', 'ok')
+    setStatus('Lead #' + id + ' created. Tip: use Find LinkedIn next.', 'ok')
     chrome.storage.local.remove('lastExtracted')
   } catch (err) {
-    setStatus('Network error — is the backend running on :8000?', 'err')
+    setStatus('Network error — check API URL (Render may be waking up).', 'err')
   } finally {
     btn.disabled = false
   }
@@ -166,5 +186,15 @@ $('reextract').addEventListener('click', ensureFresh)
 
 $('saveToken').addEventListener('click', () => {
   apiToken = $('apiToken').value.trim()
-  chrome.storage.local.set({ apiToken }, () => setStatus('API token saved', 'ok'))
+  apiBase = ($('apiBase').value.trim() || DEFAULT_API).replace(/\/$/, '')
+  chrome.storage.local.set({ apiToken, apiBase }, () => setStatus('Settings saved', 'ok'))
+})
+
+$('openLiPeople').addEventListener('click', () => {
+  const url = current?.linkedin_people_search
+  if (url) chrome.tabs.create({ url })
+})
+$('openLiCompany').addEventListener('click', () => {
+  const url = current?.linkedin_company_search
+  if (url) chrome.tabs.create({ url })
 })
