@@ -302,15 +302,22 @@ function Outreach({ lead, onUpdate }) {
     }
   }
 
-  const statusColor = (status) => {
-    if (status === 'replied') return 'bg-emerald-100 text-emerald-700'
-    if (status === 'clicked') return 'bg-blue-100 text-blue-700'
-    if (status === 'opened') return 'bg-indigo-100 text-indigo-700'
-    if (status === 'sent') return 'bg-amber-100 text-amber-800'
+  const statusColor = (email) => {
+    if (email.direction === 'in' + 'bound' || email.status === 'received') return 'bg-emerald-100 text-emerald-800'
+    if (email.status === 'replied') return 'bg-emerald-100 text-emerald-700'
+    if (email.status === 'clicked') return 'bg-blue-100 text-blue-700'
+    if (email.status === 'opened') return 'bg-indigo-100 text-indigo-700'
+    if (email.status === 'sent') return 'bg-amber-100 text-amber-800'
     return 'bg-gray-100 text-gray-700'
   }
 
   const statusLabel = (email) => {
+    if (email.direction === 'in' + 'bound' || email.status === 'received') {
+      return `Reply received · ${new Date(email.sent_at || email.created_at).toLocaleString()}`
+    }
+    if (email.status === 'replied' && email.replied_at) {
+      return `Replied · ${new Date(email.replied_at).toLocaleString()}`
+    }
     if (email.status === 'opened' && email.opened_at) {
       return `Opened · ${new Date(email.opened_at).toLocaleString()}`
     }
@@ -346,7 +353,7 @@ function Outreach({ lead, onUpdate }) {
                     )}
                   </p>
                 </div>
-                <Badge color={statusColor(email.status)}>{statusLabel(email)}</Badge>
+                <Badge color={statusColor(email)}>{statusLabel(email)}</Badge>
               </div>
               <p className="text-xs text-gray-500 mt-2 whitespace-pre-line line-clamp-4">{email.body}</p>
               <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-400 mt-2">

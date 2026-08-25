@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\EmailTrackingService;
+use App\Services\InboundReplyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class ResendWebhookController extends Controller
 {
-    public function __construct(private EmailTrackingService $tracking) {}
+    public function __construct(
+        private EmailTrackingService $tracking,
+        private InboundReplyService $inbound,
+    ) {}
 
     public function __invoke(Request $request): JsonResponse
     {
@@ -38,6 +42,12 @@ class ResendWebhookController extends Controller
 
         if (! $type) {
             return response()->json(['ok' => true, 'ignored' => true]);
+        }
+
+        if (is_string($type) && str_contains($type, 'received')) {
+            $result = $this->inbound->handle($data);
+
+            return response()->json(['ok' => true, 'type' => $type] + $result);
         }
 
         $email = $this->tracking->findEmailFromWebhookPayload($data);

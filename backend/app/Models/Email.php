@@ -10,10 +10,10 @@ class Email extends Model
 {
     use HasFactory;
 
-    public const STATUSES = ['draft', 'sent', 'opened', 'clicked', 'replied'];
+    public const STATUSES = ['draft', 'sent', 'opened', 'clicked', 'replied', 'received'];
 
     protected $fillable = [
-        'user_id', 'lead_id', 'template_id', 'direction', 'subject', 'body',
+        'user_id', 'lead_id', 'template_id', 'in_reply_to_email_id', 'direction', 'subject', 'body',
         'from_email', 'from_name', 'to_email', 'provider_message_id', 'provider',
         'status', 'sent_at', 'opened_at', 'clicked_at', 'replied_at',
     ];
@@ -38,5 +38,10 @@ class Email extends Model
     public function template(): BelongsTo
     {
         return $this->belongsTo(EmailTemplate::class, 'template_id');
+    }
+
+    public function inReplyTo(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'in_reply_to_email_id');
     }
 }

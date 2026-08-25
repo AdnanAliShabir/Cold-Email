@@ -32,20 +32,27 @@ class ResendMailService
 
         $html = nl2br(e($email->body));
 
+        $payload = [
+            'from' => $from,
+            'to' => [$email->to_email],
+            'subject' => $email->subject,
+            'text' => $email->body,
+            'html' => "<div style=\"font-family:sans-serif;font-size:14px;line-height:1.5;color:#111\">{$html}</div>",
+            'tags' => [
+                ['name' => 'crm_email_id', 'value' => (string) $email->id],
+                ['name' => 'lead_id', 'value' => (string) $email->lead_id],
+            ],
+        ];
+
+        $replyTo = app(InboundReplyService::class)->replyToAddress($email);
+        if ($replyTo) {
+            $payload['reply_to'] = [$replyTo];
+        }
+
         $response = Http::withToken($apiKey)
             ->acceptJson()
             ->asJson()
-            ->post('https://api.resend.com/emails', [
-                'from' => $from,
-                'to' => [$email->to_email],
-                'subject' => $email->subject,
-                'text' => $email->body,
-                'html' => "<div style=\"font-family:sans-serif;font-size:14px;line-height:1.5;color:#111\">{$html}</div>",
-                'tags' => [
-                    ['name' => 'crm_email_id', 'value' => (string) $email->id],
-                    ['name' => 'lead_id', 'value' => (string) $email->lead_id],
-                ],
-            ]);
+            ->post('https://api.resend.com/emails', $payload);
 
         if (! $response->successful()) {
             $detail = $response->json('message') ?? $response->body();

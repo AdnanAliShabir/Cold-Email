@@ -21,6 +21,8 @@ return [
     'resend' => [
         'key' => env('RESEND_API_KEY'),
         'webhook_secret' => env('RESEND_WEBHOOK_SECRET'),
+        // Subdomain for Resend Receiving MX (avoids conflict with root-domain inbox MX)
+        'receiving_domain' => env('RESEND_RECEIVING_DOMAIN', 'replies.tyrosoft.com'),
     ],
 
     'ses' => [

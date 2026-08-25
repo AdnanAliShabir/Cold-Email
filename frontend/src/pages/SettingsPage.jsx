@@ -8,8 +8,10 @@ export default function SettingsPage() {
     sender_name: '',
     company_name: '',
     from_email: '',
+    reply_forward_to: '',
+    reply_receiving_domain: '',
   })
-  const [defaults, setDefaults] = useState({ from_email: '', from_name: '' })
+  const [defaults, setDefaults] = useState({ from_email: '', from_name: '', reply_receiving_domain: '' })
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -19,6 +21,10 @@ export default function SettingsPage() {
         sender_name: res.data.settings?.sender_name || '',
         company_name: res.data.settings?.company_name || '',
         from_email: res.data.settings?.from_email || res.data.defaults?.from_email || '',
+        reply_forward_to: res.data.settings?.reply_forward_to || '',
+        reply_receiving_domain: res.data.settings?.reply_receiving_domain
+          || res.data.defaults?.reply_receiving_domain
+          || 'replies.tyrosoft.com',
       })
       setDefaults(res.data.defaults || {})
     })
@@ -77,6 +83,32 @@ export default function SettingsPage() {
             />
             <span className="text-xs text-gray-400 mt-1 block">
               Must be on your Resend-verified domain (e.g. @tyrosoft.com). Env default: {defaults.from_email || '—'}
+            </span>
+          </label>
+          <label className="block text-sm">
+            <span className="text-gray-600">Reply receiving domain</span>
+            <input
+              className={input + ' mt-1'}
+              value={form.reply_receiving_domain}
+              onChange={(e) => setForm((f) => ({ ...f, reply_receiving_domain: e.target.value }))}
+              placeholder={defaults.reply_receiving_domain || 'replies.tyrosoft.com'}
+            />
+            <span className="text-xs text-gray-400 mt-1 block">
+              Resend Receiving subdomain (MX on this host only). Avoids MX conflicts on tyrosoft.com.
+              Reply-To becomes you+e123@{form.reply_receiving_domain || 'replies.tyrosoft.com'}.
+            </span>
+          </label>
+          <label className="block text-sm">
+            <span className="text-gray-600">Forward replies to (optional)</span>
+            <input
+              className={input + ' mt-1'}
+              type="email"
+              value={form.reply_forward_to}
+              onChange={(e) => setForm((f) => ({ ...f, reply_forward_to: e.target.value }))}
+              placeholder="you@gmail.com"
+            />
+            <span className="text-xs text-gray-400 mt-1 block">
+              When a lead replies, a copy is also sent here so you can read it in Gmail/Outlook.
             </span>
           </label>
 
