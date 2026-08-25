@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Log;
 
 class EmailTrackingService
 {
+    private static bool $resendReadBlocked = false;
+
     /**
      * Apply a Resend (or similar) tracking event onto an Email row.
      * Hierarchy: clicked > opened > sent (never downgrade replied).
@@ -111,13 +113,14 @@ class EmailTrackingService
     public function syncLead(Lead $lead, int $limit = 15): int
     {
         $apiKey = config('services.resend.key');
-        if (! $apiKey) {
+        if (! $apiKey || self::$resendReadBlocked) {
             return 0;
         }
 
         $emails = Email::query()
             ->where('lead_id', $lead->id)
             ->where('provider', 'resend')
+            ->where('direction', 'outbound')
             ->whereNotNull('provider_message_id')
             ->whereIn('status', ['sent', 'opened'])
             ->orderByDesc('id')
@@ -127,6 +130,9 @@ class EmailTrackingService
         $updated = 0;
 
         foreach ($emails as $email) {
+            if (self::$resendReadBlocked) {
+                break;
+            }
             if ($this->syncEmailFromResend($email, $apiKey)) {
                 $updated++;
             }
@@ -138,7 +144,7 @@ class EmailTrackingService
     public function syncEmailFromResend(Email $email, ?string $apiKey = null): bool
     {
         $apiKey ??= config('services.resend.key');
-        if (! $apiKey || ! $email->provider_message_id) {
+        if (! $apiKey || ! $email->provider_message_id || self::$resendReadBlocked) {
             return false;
         }
 
@@ -149,11 +155,17 @@ class EmailTrackingService
                 ->get('https://api.resend.com/emails/'.$email->provider_message_id);
 
             if (! $response->successful()) {
-                Log::info('Resend email lookup failed', [
-                    'email_id' => $email->id,
-                    'status' => $response->status(),
-                    'body' => $response->body(),
-                ]);
+                $body = $response->body();
+                if ($response->status() === 401 && str_contains($body, 'restricted_api_key')) {
+                    self::$resendReadBlocked = true;
+                    Log::warning('Resend API key is Sending-only; open/click sync and inbound body fetch need a Full Access key. Create one at Resend → API Keys.');
+                } else {
+                    Log::info('Resend email lookup failed', [
+                        'email_id' => $email->id,
+                        'status' => $response->status(),
+                        'body' => $body,
+                    ]);
+                }
 
                 return false;
             }

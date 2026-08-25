@@ -95,7 +95,7 @@ class InboundReplyService
             return null;
         }
 
-        [$local] = explode('@', $from, 2);
+        [$local, $fromDomain] = explode('@', $from, 2);
         $local = explode('+', $local, 2)[0];
         if ($local === '') {
             $local = 'reply';
@@ -107,12 +107,11 @@ class InboundReplyService
         if ($domain === '') {
             $domain = trim((string) config('services.resend.receiving_domain', ''));
         }
-        if ($domain === '') {
-            $domain = explode('@', $from, 2)[1] ?? '';
-        }
-        $domain = strtolower(ltrim($domain, '@'));
-        if ($domain === '') {
-            return null;
+        // Never fall back to root From-domain (e.g. tyrosoft.com) — that causes 550 when no inbox MX
+        $domain = strtolower(ltrim($domain !== '' ? $domain : 'replies.tyrosoft.com', '@'));
+        if ($domain === '' || strcasecmp($domain, (string) $fromDomain) === 0) {
+            // If someone set receiving domain equal to From domain, force replies subdomain
+            $domain = 'replies.'.preg_replace('/^replies\./i', '', (string) $fromDomain);
         }
 
         return "{$local}+e{$email->id}@{$domain}";
@@ -132,11 +131,16 @@ class InboundReplyService
                 ->get('https://api.resend.com/emails/receiving/'.$id);
 
             if (! $response->successful()) {
-                Log::warning('Resend received-email fetch failed', [
-                    'id' => $id,
-                    'status' => $response->status(),
-                    'body' => $response->body(),
-                ]);
+                $body = $response->body();
+                if ($response->status() === 401 && str_contains($body, 'restricted_api_key')) {
+                    Log::warning('Resend receiving fetch blocked: API key is Sending-only. Create a Full Access key.');
+                } else {
+                    Log::warning('Resend received-email fetch failed', [
+                        'id' => $id,
+                        'status' => $response->status(),
+                        'body' => $body,
+                    ]);
+                }
 
                 return null;
             }
