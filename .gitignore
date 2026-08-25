@@ -30,3 +30,6 @@ backend/bootstrap/cache/*.php
 .vscode/
 *.log
 .phpunit.result.cache
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
