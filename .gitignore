@@ -1,6 +1,4 @@
 .DS_Store
-.env
-.env.*
 !.env.example
 
 # Dependencies & build
@@ -27,9 +25,9 @@ backend/bootstrap/cache/*.php
 
 # IDE / OS
 .idea/
-.vscode/
 *.log
 .phpunit.result.cache
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+config.bat
